@@ -3,55 +3,63 @@ import pandas as pd
 from datetime import datetime, timedelta
 import numpy as np
 
-# 1. 앱 설정 (가장 먼저 실행되어야 함)
+# 1. 앱 기본 설정 및 모바일 최적화 레이아웃
 st.set_page_config(page_title="송수학 관리앱", layout="centered")
 
-# 2. 새로고침 방지 및 스크롤 최적화 마법의 코드 (수정됨)
+# 2. 커스텀 디자인 (CSS) - 버튼 크기 키우기 및 새로고침 방지
 st.markdown("""
     <style>
-    /* 1. 최상위 요소에서 새로고침 바운스 및 당겨서 새로고침 완전 차단 */
-    html, body {
-        overscroll-behavior-y: none !important;
-        overflow: hidden !important;
-        height: 100%;
+    /* 상단 메뉴 버튼 스타일 */
+    div.stButton > button {
         width: 100%;
+        border-radius: 12px;
+        height: 4em;
+        background-color: #f8f9fa;
+        border: 2px solid #e9ecef;
+        font-weight: bold;
+        font-size: 16px;
+        transition: all 0.3s;
     }
-
-    /* 2. 스트림릿 메인 컨테이너에 독립적인 스크롤 부여 */
-    [data-testid="stAppViewContainer"] {
-        overflow-y: auto !important;
+    div.stButton > button:hover {
+        border-color: #007BFF;
+        color: #007BFF;
+    }
+    
+    /* 모바일 당겨서 새로고침 방지 및 스크롤 최적화 */
+    html, body, [data-testid="stAppViewContainer"] {
         overscroll-behavior-y: none !important;
         -webkit-overflow-scrolling: touch;
     }
 
-    /* 3. 내부 콘텐츠 박스 설정 */
-    .main .block-container {
-        padding-top: 2rem !important;
-        padding-bottom: 5rem !important;
+    /* 탭 메뉴 강조 표시용 (임시) */
+    .st-emotion-cache-12w0qpk {
+        padding-top: 1rem !important;
     }
     </style>
 """, unsafe_allow_html=True)
 
-# --- 1. Data Initialization ---
+# 3. 데이터 초기화 및 상태 관리
 if 'student_data' not in st.session_state:
+    # 초기 샘플 데이터 생성
     today = datetime.now().date()
     names = ["김철수", "이영희", "박지민", "최하늘", "정민수", "강다은", "조세호", "윤서아", "한가람", "임재현"]
-    times = ["17:00 (고1)", "19:00 (고2)", "21:00 (고3)"]
+    classes = ["17:00 (고1)", "19:00 (고2)", "21:00 (고3)"]
     data = []
     for i, name in enumerate(names):
         data.append({
             "Name": name,
-            "Class": times[i % 3],
-            "Last Payment": today - timedelta(days=np.random.randint(5, 35))
+            "Class": classes[i % 3],
+            "Last Payment": today - timedelta(days=np.random.randint(0, 30))
         })
     st.session_state.student_data = pd.DataFrame(data)
 
-# Financial Constants
-RENT = 800000
-UTILITY = 300000
-FEE = 300000
+if 'current_page' not in st.session_state:
+    st.session_state.current_page = "📍 현황"
 
-# --- 2. Helper Functions ---
+# 상수 설정
+RENT, UTILITY, FEE = 800000, 300000, 300000
+
+# 데이터 처리 함수
 def get_processed_df():
     df = st.session_state.student_data.copy()
     df['Last Payment'] = pd.to_datetime(df['Last Payment']).dt.date
@@ -59,85 +67,97 @@ def get_processed_df():
     df['Days Left'] = (df['Next Due'] - datetime.now().date()).apply(lambda x: x.days)
     return df
 
-st.title("🏫 고등수학 학원 통합 관리 시스템")
+# --- 메인 화면 시작 ---
+st.title("🏫 송수학 통합 관리")
 
-# --- 3. Interface Layout ---
-# Row 1: Time Slot Monitoring
-st.subheader("📍 타임별 수강 인원 확인")
-col1, col2, col3 = st.columns(3)
-df_main = get_processed_df()
-
-with col1:
-    if st.button("17:00 (고1) 인원 확인"):
-        st.info(f"고1반 현재: {len(df_main[df_main['Class']=='17:00 (고1)'])}명")
-        st.dataframe(df_main[df_main['Class']=='17:00 (고1)'][['Name', 'Next Due']])
-
-with col2:
-    if st.button("19:00 (고2) 인원 확인"):
-        st.info(f"고2반 현재: {len(df_main[df_main['Class']=='19:00 (고2)'])}명")
-        st.dataframe(df_main[df_main['Class']=='19:00 (고2)'][['Name', 'Next Due']])
-
-with col3:
-    if st.button("21:00 (고3) 인원 확인"):
-        st.info(f"고3반 현재: {len(df_main[df_main['Class']=='21:00 (고3)'])}명")
-        st.dataframe(df_main[df_main['Class']=='21:00 (고3)'][['Name', 'Next Due']])
+# 4. 상단 네비게이션 버튼 (엘리베이터 버튼 방식)
+m1, m2, m3 = st.columns(3)
+with m1:
+    if st.button("📍 현황"):
+        st.session_state.current_page = "📍 현황"
+with m2:
+    if st.button("👤 관리"):
+        st.session_state.current_page = "👤 관리"
+with m3:
+    if st.button("💰 회계"):
+        st.session_state.current_page = "💰 회계"
 
 st.divider()
+df_main = get_processed_df()
 
-# Row 2: Student Admin (Add/Delete)
-st.subheader("👤 원생 추가 및 삭제")
-add_col, del_col = st.columns(2)
+# 5. 페이지별 화면 렌더링
+# --- [페이지 1: 인원 현황] ---
+if st.session_state.current_page == "📍 현황":
+    st.subheader("타임별 수강 현황")
+    for t in ["17:00 (고1)", "19:00 (고2)", "21:00 (고3)"]:
+        with st.expander(f"📌 {t} 원생 목록", expanded=(t == "17:00 (고1)")):
+            filtered = df_main[df_main['Class'] == t]
+            st.write(f"현재 인원: **{len(filtered)}명**")
+            if not filtered.empty:
+                st.table(filtered[['Name', 'Next Due']])
+            else:
+                st.write("등록된 원생이 없습니다.")
 
-with add_col:
-    st.write("**➕ 신규 원생 등록**")
-    new_name = st.text_input("이름 입력")
-    new_class = st.selectbox("반 선택", ["17:00 (고1)", "19:00 (고2)", "21:00 (고3)"])
-    if st.button("원생 추가 (30일 자동 설정)"):
-        if new_name:
-            new_student = {"Name": new_name, "Class": new_class, "Last Payment": datetime.now().date()}
-            st.session_state.student_data = pd.concat([st.session_state.student_data, pd.DataFrame([new_student])], ignore_index=True)
-            st.success(f"{new_name} 학생이 등록되었습니다.")
-            st.rerun()
+# --- [페이지 2: 원생 관리] ---
+elif st.session_state.current_page == "👤 관리":
+    st.subheader("원생 등록 및 퇴원")
+    
+    # 원생 추가 폼
+    with st.form("add_student", clear_on_submit=True):
+        st.write("**➕ 신규 원생 등록**")
+        n_name = st.text_input("이름")
+        n_class = st.selectbox("반 선택", ["17:00 (고1)", "19:00 (고2)", "21:00 (고3)"])
+        if st.form_submit_button("등록 완료"):
+            if n_name:
+                new_row = {"Name": n_name, "Class": n_class, "Last Payment": datetime.now().date()}
+                st.session_state.student_data = pd.concat([st.session_state.student_data, pd.DataFrame([new_row])], ignore_index=True)
+                st.success(f"{n_name} 학생이 등록되었습니다.")
+                st.rerun()
+            else:
+                st.error("이름을 입력해주세요.")
 
-with del_col:
-    st.write("**❌ 원생 퇴원 처리**")
+    st.divider()
+
+    # 원생 삭제
+    st.write("**❌ 퇴원 처리**")
     del_target = st.selectbox("삭제할 학생 선택", [""] + df_main['Name'].tolist())
-    if st.button("선택한 학생 삭제"):
+    if st.button("선택한 학생 영구 삭제"):
         if del_target:
             st.session_state.student_data = st.session_state.student_data[st.session_state.student_data['Name'] != del_target]
             st.warning(f"{del_target} 학생이 삭제되었습니다.")
             st.rerun()
 
-st.divider()
-
-# Row 3: Admin Actions (Finance/Extensions)
-st.subheader("⚙️ 학원 관리 및 회계")
-admin_col1, admin_col2, admin_col3 = st.columns(3)
-
-with admin_col1:
-    st.write("**🗓️ 휴강 및 개인사정 연장**")
-    target_student = st.selectbox("연장할 학생 선택", df_main['Name'].tolist())
-    days_to_add = st.number_input("연장 일수", value=1, min_value=1)
-    if st.button("결제일 연장 적용"):
-        # 인덱스를 찾아 해당 학생의 결제일 연장
-        idx = st.session_state.student_data.index[st.session_state.student_data['Name'] == target_student][0]
-        st.session_state.student_data.at[idx, 'Last Payment'] += timedelta(days=days_to_add)
-        st.success(f"{target_student} 학생 {days_to_add}일 연장 완료")
+# --- [페이지 3: 회계 및 연장] ---
+elif st.session_state.current_page == "💰 회계":
+    st.subheader("회계 및 일정 관리")
+    
+    # 결제일 연장
+    st.write("**🗓️ 개인 사정/휴강 일수 연장**")
+    target_s = st.selectbox("연장 대상 학생", df_main['Name'].tolist())
+    add_days = st.number_input("추가할 일수", value=1, min_value=1)
+    if st.button("연장 적용하기"):
+        idx = st.session_state.student_data.index[st.session_state.student_data['Name'] == target_s][0]
+        st.session_state.student_data.at[idx, 'Last Payment'] += timedelta(days=add_days)
+        st.success(f"{target_s} 학생의 결제일이 {add_days}일 연장되었습니다.")
         st.rerun()
 
-with admin_col2:
-    st.write("**🔔 미납 및 결제 임박 목록**")
+    st.divider()
+
+    # 수익 지표
+    col_rev, col_exp = st.columns(2)
+    total_revenue = len(df_main) * FEE
+    with col_rev:
+        st.metric("예상 월 매출", f"{total_revenue:,.0f}원")
+    with col_exp:
+        net_profit = total_revenue - (RENT + UTILITY)
+        st.metric("예상 순수익", f"{net_profit:,.0f}원", delta=f"지출 {RENT+UTILITY:,.0f}원", delta_color="inverse")
+
+    # 미납 알림
+    st.write("**🔔 결제 임박 알림 (5일 이내)**")
     alerts = df_main[df_main['Days Left'] <= 5].sort_values('Days Left')
     if not alerts.empty:
         for _, row in alerts.iterrows():
-            color = "red" if row['Days Left'] < 0 else "orange"
-            st.markdown(f":{color}[[{row['Class']}] {row['Name']} - {row['Days Left']}일]")
+            c = "red" if row['Days Left'] < 0 else "orange"
+            st.markdown(f":{c}[[{row['Class']}] {row['Name']} : {row['Days Left']}일 남음]")
     else:
-        st.write("특이사항 없음")
-
-with admin_col3:
-    st.write("**💰 월간 회계 장부**")
-    total_rev = len(df_main) * FEE
-    total_exp = RENT + UTILITY
-    st.metric("이번 달 예상 순수익", f"{total_rev - total_exp:,.0f}원")
-    st.caption(f"매출: {total_rev:,.0f} / 지출: {total_exp:,.0f}")
+        st.write("현재 결제 임박 원생이 없습니다.")
