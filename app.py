@@ -5,11 +5,16 @@ from datetime import datetime, timedelta
 import numpy as np
 
 st.set_page_config(page_title="HighSchool Math Academy Manager", layout="wide")
-# --- 스크롤 끼임 방지 마법의 코드 ---
+# --- 더 강력한 스크롤 방지 코드 ---
 st.markdown("""
     <style>
-    [data-testid="stAppViewContainer"] {
-        overflow-y: auto;
+    html, body, [data-testid="stAppViewContainer"] {
+        overflow: auto !important;
+        height: auto !important;
+    }
+    /* 모바일에서 당겨서 새로고침 방지 */
+    body {
+        overscroll-behavior-y: none;
     }
     </style>
 """, unsafe_allow_html=True)
