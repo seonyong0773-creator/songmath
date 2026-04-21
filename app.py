@@ -5,7 +5,14 @@ from datetime import datetime, timedelta
 import numpy as np
 
 st.set_page_config(page_title="HighSchool Math Academy Manager", layout="wide")
-
+# --- 스크롤 끼임 방지 마법의 코드 ---
+st.markdown("""
+    <style>
+    [data-testid="stAppViewContainer"] {
+        overflow-y: auto;
+    }
+    </style>
+""", unsafe_allow_html=True)
 # --- 1. Data Initialization ---
 if 'student_data' not in st.session_state:
     today = datetime.now().date()
