@@ -4,20 +4,30 @@ import pandas as pd
 from datetime import datetime, timedelta
 import numpy as np
 
-st.set_page_config(page_title="HighSchool Math Academy Manager", layout="wide")
-# --- 더 강력한 스크롤 방지 코드 ---
+# 1. 앱 설정
+st.set_page_config(page_title="송수학 관리앱", layout="centered")
+
+# 2. 새로고침 방지 및 스크롤 고정 마법의 코드
 st.markdown("""
     <style>
+    /* 1. 스마트폰의 '당겨서 새로고침' 기능을 아예 끕니다 */
     html, body, [data-testid="stAppViewContainer"] {
-        overflow: auto !important;
-        height: auto !important;
+        overscroll-behavior-y: contain !important;
+        overflow-y: auto !important;
+        position: fixed;
+        width: 100%;
+        height: 100%;
     }
-    /* 모바일에서 당겨서 새로고침 방지 */
-    body {
-        overscroll-behavior-y: none;
+
+    /* 2. 실제 내용이 담긴 구역만 스크롤되게 만듭니다 */
+    .main .block-container {
+        overflow-y: auto !important;
+        max-height: 100vh;
     }
     </style>
 """, unsafe_allow_html=True)
+
+# --- 여기서부터 선용님의 기존 코드를 적으시면 됩니다 ---
 # --- 1. Data Initialization ---
 if 'student_data' not in st.session_state:
     today = datetime.now().date()
