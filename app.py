@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 import os
-import numpy as np
 
 # 1. 앱 설정 및 모바일 최적화
 st.set_page_config(page_title="송수학", layout="centered")
@@ -37,10 +36,8 @@ st.markdown("""
 DB_FILE = "students.csv"
 
 def load_data():
-    if os.path.exists(DB_FILE):
-        return pd.read_csv(DB_FILE)
-    else:
-        return pd.DataFrame(columns=["Name", "Class", "Last Payment"])
+    if os.path.exists(DB_FILE): return pd.read_csv(DB_FILE)
+    else: return pd.DataFrame(columns=["Name", "Class", "Last Payment"])
 
 def save_data(df):
     df.to_csv(DB_FILE, index=False)
@@ -48,7 +45,7 @@ def save_data(df):
 if 'student_data' not in st.session_state:
     st.session_state.student_data = load_data()
 
-# 설정값 유지 (지출 및 반별 수강료)
+# 설정값 세션 유지
 settings = {'rent': 800000, 'other': 300000, 'f17': 300000, 'f19': 350000, 'f21': 400000}
 for k, v in settings.items():
     if k not in st.session_state: st.session_state[k] = v
@@ -64,12 +61,7 @@ def get_processed_df():
 # --- 메인 인터페이스 시작 ---
 st.title("🏫 송수학 통합 관리")
 
-menu = st.radio(
-    "메뉴", 
-    ["📍현황", "👤관리", "💰수익", "🛠️지출", "🔔알림", "🗓️연장", "⚙️기타"], 
-    horizontal=True, label_visibility="collapsed"
-)
-
+menu = st.radio("메뉴", ["📍현황", "👤관리", "💰수익", "🛠️지출", "🔔알림", "🗓️연장", "⚙️기타"], horizontal=True, label_visibility="collapsed")
 st.divider()
 current_df = get_processed_df()
 
@@ -80,7 +72,7 @@ if menu == "📍현황":
     st.markdown(f"현재 인원: **{len(filtered)}명**")
     st.dataframe(filtered[['Name', 'Next Due', 'D-Day']], use_container_width=True, height=350)
 
-# [2. 관리]
+# [2. 관리] - 등록 및 삭제 피드백 강화
 elif menu == "👤관리":
     sub1, sub2 = st.tabs(["➕등록", "❌퇴원"])
     with sub1:
@@ -92,59 +84,44 @@ elif menu == "👤관리":
                     new_row = pd.DataFrame([{"Name": n_name, "Class": n_class, "Last Payment": datetime.now().date()}])
                     st.session_state.student_data = pd.concat([st.session_state.student_data, new_row], ignore_index=True)
                     save_data(st.session_state.student_data)
-                    st.success(f"✅ {n_name} 학생이 등록되었습니다!")
-                    st.toast(f"{n_name} 등록 완료!")
-                    st.rerun()
+                    st.success(f"✅ [{n_class}] {n_name} 학생 등록 완료!")
+                    st.toast(f"{n_name} 등록 성공! 🎉")
+                else:
+                    st.error("이름을 입력해주세요.")
     with sub2:
         del_target = st.selectbox("삭제 대상 선택", [""] + current_df['Name'].tolist())
         if st.button("학생 삭제 수행"):
             if del_target:
                 st.session_state.student_data = st.session_state.student_data[st.session_state.student_data['Name'] != del_target]
                 save_data(st.session_state.student_data)
-                st.warning(f"🗑️ {del_target} 삭제 완료")
+                st.warning(f"🗑️ {del_target} 학생이 삭제되었습니다.")
+                st.toast(f"{del_target} 삭제 완료")
                 st.rerun()
 
-# [3. 수익] - 미납 손실액 계산 기능 추가!
+# [3. 수익]
 elif menu == "💰수익":
-    st.subheader("💰 이번 달 재무 요약")
+    r17 = len(current_df[current_df['Class'] == "17:00"]) * st.session_state.f17
+    r19 = len(current_df[current_df['Class'] == "19:00"]) * st.session_state.f19
+    r21 = len(current_df[current_df['Class'] == "21:00"]) * st.session_state.f21
+    total_potential = r17 + r19 + r21
+    late_df = current_df[current_df['D-Day'] < 0]
+    total_loss = (len(late_df[late_df['Class'] == "17:00"]) * st.session_state.f17 +
+                  len(late_df[late_df['Class'] == "19:00"]) * st.session_state.f19 +
+                  len(late_df[late_df['Class'] == "21:00"]) * st.session_state.f21)
     
-    # 1. 총 예상 매출 계산 (전체 인원 기준)
-    rev_17 = len(current_df[current_df['Class'] == "17:00"]) * st.session_state.f17
-    rev_19 = len(current_df[current_df['Class'] == "19:00"]) * st.session_state.f19
-    rev_21 = len(current_df[current_df['Class'] == "21:00"]) * st.session_state.f21
-    total_potential_rev = rev_17 + rev_19 + rev_21
-    
-    # 2. 미납 손실액 계산 (D-Day < 0 인 학생들)
-    late_students = current_df[current_df['D-Day'] < 0]
-    loss_17 = len(late_students[late_students['Class'] == "17:00"]) * st.session_state.f17
-    loss_19 = len(late_students[late_students['Class'] == "19:00"]) * st.session_state.f19
-    loss_21 = len(late_students[late_students['Class'] == "21:00"]) * st.session_state.f21
-    total_loss = loss_17 + loss_19 + loss_21
-    
-    # 3. 실제 기대 수익 및 순수익
-    actual_rev = total_potential_rev - total_loss
-    total_exp = st.session_state.rent + st.session_state.other
-    net_profit = actual_rev - total_exp
-    
-    # 지표 표시
     c1, c2 = st.columns(2)
-    with c1:
-        st.metric("총 예상 매출", f"{total_potential_rev:,.0f}원")
-    with c2:
-        st.metric("미납 손실액", f"-{total_loss:,.0f}원", delta_color="normal")
-        
+    with c1: st.metric("총 예상 매출", f"{total_potential:,.0f}원")
+    with c2: st.metric("미납 손실", f"-{total_loss:,.0f}원")
+    
+    actual_rev = total_potential - total_loss
+    net_profit = actual_rev - (st.session_state.rent + st.session_state.other)
+    
     st.divider()
-    
     c3, c4 = st.columns(2)
-    with c3:
-        st.metric("현재 실제 매출", f"{actual_rev:,.0f}원")
-    with c4:
-        st.metric("최종 순수익", f"{net_profit:,.0f}원", delta=f"지출 {total_exp:,.0f}원", delta_color="inverse")
-    
-    if total_loss > 0:
-        st.error(f"⚠️ 현재 {len(late_students)}명의 미납으로 인해 {total_loss:,.0f}원의 손실이 발생 중입니다.")
+    with c3: st.metric("현재 실제 매출", f"{actual_rev:,.0f}원")
+    with c4: st.metric("최종 순수익", f"{net_profit:,.0f}원", delta=f"지출 {st.session_state.rent+st.session_state.other:,.0f}원", delta_color="inverse")
 
-# [4. 지출]
+# [4. 지출] - 저장 버튼 및 알림 추가!
 elif menu == "🛠️지출":
     st.write("**[단가 및 고정비 설정]**")
     st.session_state.f17 = st.number_input("고1 수강료", value=st.session_state.f17, step=10000)
@@ -152,24 +129,22 @@ elif menu == "🛠️지출":
     st.session_state.f21 = st.number_input("고3 수강료", value=st.session_state.f21, step=10000)
     st.session_state.rent = st.number_input("월세", value=st.session_state.rent, step=10000)
     st.session_state.other = st.number_input("기타 지출", value=st.session_state.other, step=5000)
-    if st.button("수정 내용 저장"):
-        st.success("✅ 설정이 저장되었습니다!")
-        st.toast("저장 완료 ✨")
+    if st.button("⚙️ 모든 설정 저장"):
+        st.success("✅ 수강료 및 지출 설정이 안전하게 저장되었습니다!")
+        st.toast("설정 저장 완료!")
 
 # [5. 알림]
 elif menu == "🔔알림":
     st.subheader("결제 알림 (D-5)")
     alerts = current_df[current_df['D-Day'] <= 5].sort_values('D-Day')
-    if not alerts.empty:
-        st.dataframe(alerts[['Name', 'Class', 'D-Day']], use_container_width=True, height=350)
-    else:
-        st.success("결제 예정 학생이 없습니다.")
+    if not alerts.empty: st.dataframe(alerts[['Name', 'Class', 'D-Day']], use_container_width=True, height=350)
+    else: st.success("현재 결제 예정 학생이 없습니다.")
 
-# [6. 연장]
+# [6. 연장] - 결과 알림 확실하게!
 elif menu == "🗓️연장":
     st.subheader("결제 기한 조정 (+/-)")
     target_s = st.selectbox("학생 선택", current_df['Name'].tolist())
-    adjust_days = st.number_input("조정 일수 (양수:연장 / 음수:단축)", value=0, step=1)
+    adjust_days = st.number_input("조정 일수", value=0, step=1)
     if st.button("조정 사항 적용"):
         if target_s:
             idx = st.session_state.student_data.index[st.session_state.student_data['Name'] == target_s][0]
@@ -177,17 +152,15 @@ elif menu == "🗓️연장":
             new_date = curr_date + timedelta(days=adjust_days)
             st.session_state.student_data.at[idx, 'Last Payment'] = str(new_date)
             save_data(st.session_state.student_data)
-            st.success(f"🗓️ 날짜 조정 완료!")
-            st.toast("변경 성공 ✨")
+            
+            if adjust_days >= 0: st.success(f"🗓️ {target_s} 학생 {adjust_days}일 연장되었습니다.")
+            else: st.warning(f"🗓️ {target_s} 학생 {abs(adjust_days)}일 단축되었습니다.")
+            st.toast(f"{target_s} 기간 조정 완료 ✨")
             st.rerun()
 
-# [7. 기타]
+# [7. 기타] - 백업 알림 추가!
 elif menu == "⚙️기타":
     st.subheader("⚙️ 백업 및 관리")
     csv_data = st.session_state.student_data.to_csv(index=False).encode('utf-8-sig')
-    st.download_button(
-        label="📥 현재 명단 다운로드 (CSV)",
-        data=csv_data,
-        file_name=f"songmath_backup_{datetime.now().strftime('%Y%m%d')}.csv",
-        mime="text/csv",
-    )
+    if st.download_button(label="📥 현재 명단 다운로드 (CSV)", data=csv_data, file_name=f"songmath_backup.csv", mime="text/csv"):
+        st.toast("파일 다운로드 시작!")
