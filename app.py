@@ -1,33 +1,37 @@
-
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 import numpy as np
 
-# 1. 앱 설정
+# 1. 앱 설정 (가장 먼저 실행되어야 함)
 st.set_page_config(page_title="송수학 관리앱", layout="centered")
 
-# 2. 새로고침 방지 및 스크롤 고정 마법의 코드
+# 2. 새로고침 방지 및 스크롤 최적화 마법의 코드 (수정됨)
 st.markdown("""
     <style>
-    /* 1. 스마트폰의 '당겨서 새로고침' 기능을 아예 끕니다 */
-    html, body, [data-testid="stAppViewContainer"] {
-        overscroll-behavior-y: contain !important;
-        overflow-y: auto !important;
-        position: fixed;
-        width: 100%;
+    /* 1. 최상위 요소에서 새로고침 바운스 및 당겨서 새로고침 완전 차단 */
+    html, body {
+        overscroll-behavior-y: none !important;
+        overflow: hidden !important;
         height: 100%;
+        width: 100%;
     }
 
-    /* 2. 실제 내용이 담긴 구역만 스크롤되게 만듭니다 */
-    .main .block-container {
+    /* 2. 스트림릿 메인 컨테이너에 독립적인 스크롤 부여 */
+    [data-testid="stAppViewContainer"] {
         overflow-y: auto !important;
-        max-height: 100vh;
+        overscroll-behavior-y: none !important;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* 3. 내부 콘텐츠 박스 설정 */
+    .main .block-container {
+        padding-top: 2rem !important;
+        padding-bottom: 5rem !important;
     }
     </style>
 """, unsafe_allow_html=True)
 
-# --- 여기서부터 선용님의 기존 코드를 적으시면 됩니다 ---
 # --- 1. Data Initialization ---
 if 'student_data' not in st.session_state:
     today = datetime.now().date()
@@ -92,7 +96,7 @@ with add_col:
         if new_name:
             new_student = {"Name": new_name, "Class": new_class, "Last Payment": datetime.now().date()}
             st.session_state.student_data = pd.concat([st.session_state.student_data, pd.DataFrame([new_student])], ignore_index=True)
-            st.success(f"{new_name} 학생이 등록되었습니다. (다음 결제일: 30일 뒤)")
+            st.success(f"{new_name} 학생이 등록되었습니다.")
             st.rerun()
 
 with del_col:
@@ -115,6 +119,7 @@ with admin_col1:
     target_student = st.selectbox("연장할 학생 선택", df_main['Name'].tolist())
     days_to_add = st.number_input("연장 일수", value=1, min_value=1)
     if st.button("결제일 연장 적용"):
+        # 인덱스를 찾아 해당 학생의 결제일 연장
         idx = st.session_state.student_data.index[st.session_state.student_data['Name'] == target_student][0]
         st.session_state.student_data.at[idx, 'Last Payment'] += timedelta(days=days_to_add)
         st.success(f"{target_student} 학생 {days_to_add}일 연장 완료")
