@@ -34,19 +34,18 @@ st.markdown("""
         color: #007BFF;
     }
     div[data-testid="stRadio"] input { display: none; }
-    .block-container { padding-top: 1rem !important; padding-bottom: 1rem !important; }
+    .block-container { padding-top: 1.5rem !important; padding-bottom: 1rem !important; }
     h1 { font-size: 1.4rem !important; text-align: center; }
     </style>
 """, unsafe_allow_html=True)
 
-# --- 3. 오프라인 파일 저장 시스템 ---
+# --- 3. 오프라인 파일 저장 시스템 (CSV) ---
 DB_FILE = "students.csv"
 
 def load_data():
     if os.path.exists(DB_FILE):
         return pd.read_csv(DB_FILE)
     else:
-        # 파일이 없을 때 초기 샘플 데이터
         return pd.DataFrame(columns=["Name", "Class", "Last Payment"])
 
 def save_data(df):
@@ -56,7 +55,7 @@ def save_data(df):
 if 'student_data' not in st.session_state:
     st.session_state.student_data = load_data()
 
-# 지출/수강료 설정 세션 유지
+# 수강료 및 지출 설정 유지
 settings = {'rent': 800000, 'other': 300000, 'f17': 300000, 'f19': 350000, 'f21': 400000}
 for k, v in settings.items():
     if k not in st.session_state: st.session_state[k] = v
@@ -69,7 +68,7 @@ def get_processed_df():
     df['D-Day'] = (df['Next Due'] - datetime.now().date()).apply(lambda x: x.days)
     return df
 
-# --- 메인 인터페이스 ---
+# --- 메인 인터페이스 시작 ---
 st.title("🏫 송수학 통합 관리")
 
 # 4. 가로 7버튼 통합 메뉴
@@ -90,25 +89,27 @@ if menu == "📍현황":
     st.write(f"현재 인원: **{len(filtered)}명**")
     st.dataframe(filtered[['Name', 'Next Due', 'D-Day']], use_container_width=True, height=350)
 
-# [2. 관리]
+# [2. 관리] - 등록 시 반 선택 -> 이름 순서로 변경 완료!
 elif menu == "👤관리":
     sub1, sub2 = st.tabs(["➕등록", "❌퇴원"])
     with sub1:
         with st.form("add_form", clear_on_submit=True):
-            n_name = st.text_input("학생 이름")
-            n_class = st.selectbox("반", ["17:00", "19:00", "21:00"])
+            # 순서 변경: 반 선택이 먼저 나옵니다.
+            n_class = st.selectbox("반 선택", ["17:00", "19:00", "21:00"])
+            n_name = st.text_input("학생 이름 입력")
+            
             if st.form_submit_button("등록 완료"):
                 if n_name:
                     new_row = pd.DataFrame([{"Name": n_name, "Class": n_class, "Last Payment": datetime.now().date()}])
                     st.session_state.student_data = pd.concat([st.session_state.student_data, new_row], ignore_index=True)
                     save_data(st.session_state.student_data)
-                    st.success(f"✅ {n_name} 학생이 등록되었습니다!")
-                    st.toast(f"{n_name} 등록 완료!")
+                    st.success(f"✅ [{n_class}] {n_name} 학생 등록 완료!")
+                    st.toast(f"{n_name} 등록 성공")
                 else:
-                    st.error("이름을 입력해주세요.")
+                    st.error("학생 이름을 입력해주세요.")
     with sub2:
-        del_target = st.selectbox("삭제 대상", [""] + current_df['Name'].tolist())
-        if st.button("삭제 수행"):
+        del_target = st.selectbox("삭제 대상 선택", [""] + current_df['Name'].tolist())
+        if st.button("학생 삭제 수행"):
             if del_target:
                 st.session_state.student_data = st.session_state.student_data[st.session_state.student_data['Name'] != del_target]
                 save_data(st.session_state.student_data)
@@ -121,18 +122,18 @@ elif menu == "💰수익":
     r19 = len(current_df[current_df['Class'] == "19:00"]) * st.session_state.f19
     r21 = len(current_df[current_df['Class'] == "21:00"]) * st.session_state.f21
     total_rev = r17 + r19 + r21
-    st.metric("이번 달 매출", f"{total_rev:,.0f}원")
-    st.metric("예상 순수익", f"{total_rev - (st.session_state.rent + st.session_state.other):,.0f}원")
+    st.metric("이번 달 총 매출", f"{total_rev:,.0f}원")
+    st.metric("이번 달 순수익", f"{total_rev - (st.session_state.rent + st.session_state.other):,.0f}원")
 
 # [4. 지출]
 elif menu == "🛠️지출":
-    st.write("**[수강료 및 지출 설정]**")
+    st.write("**[단가 및 고정비 설정]**")
     st.session_state.f17 = st.number_input("고1 수강료", value=st.session_state.f17, step=10000)
     st.session_state.f19 = st.number_input("고2 수강료", value=st.session_state.f19, step=10000)
     st.session_state.f21 = st.number_input("고3 수강료", value=st.session_state.f21, step=10000)
     st.session_state.rent = st.number_input("월세", value=st.session_state.rent, step=10000)
-    st.session_state.other = st.number_input("기타 공과금", value=st.session_state.other, step=5000)
-    st.success("✅ 설정이 실시간으로 반영됩니다.")
+    st.session_state.other = st.number_input("기타 지출", value=st.session_state.other, step=5000)
+    st.success("✅ 설정이 즉시 반영되었습니다.")
 
 # [5. 알림]
 elif menu == "🔔알림":
@@ -143,40 +144,35 @@ elif menu == "🔔알림":
     else:
         st.success("현재 결제 예정 학생이 없습니다.")
 
-# [6. 연장] - 마이너스(-) 입력 가능하도록 수정!
+# [6. 연장]
 elif menu == "🗓️연장":
-    st.subheader("결제 기한 조정")
-    st.info("💡 양수(+)는 기간 연장, 음수(-)는 기간 단축")
+    st.subheader("결제 기한 조정 (+/-)")
+    st.info("💡 양수는 기간 연장, 음수는 기간 단축")
     target_s = st.selectbox("학생 선택", current_df['Name'].tolist())
-    # min_value를 제거하여 마이너스 입력이 가능하게 함
-    adjust_days = st.number_input("조정할 일수 (+/-)", value=0, step=1)
+    adjust_days = st.number_input("조정 일수", value=0, step=1)
     
-    if st.button("변경 사항 적용"):
+    if st.button("조정 사항 적용"):
         if target_s:
             idx = st.session_state.student_data.index[st.session_state.student_data['Name'] == target_s][0]
-            # 기존 날짜에 입력한 일수(양수 또는 음수)를 더함
             current_date = pd.to_datetime(st.session_state.student_data.at[idx, 'Last Payment']).date()
             new_date = current_date + timedelta(days=adjust_days)
-            
             st.session_state.student_data.at[idx, 'Last Payment'] = str(new_date)
             save_data(st.session_state.student_data)
             
             if adjust_days > 0:
-                st.success(f"🗓️ {target_s} 학생의 기간이 {adjust_days}일 연장되었습니다.")
+                st.success(f"🗓️ {target_s} 학생 {adjust_days}일 연장 완료!")
             elif adjust_days < 0:
-                st.warning(f"🗓️ {target_s} 학생의 기간이 {abs(adjust_days)}일 단축되었습니다.")
-            else:
-                st.info("변동 사항이 없습니다.")
+                st.warning(f"🗓️ {target_s} 학생 {abs(adjust_days)}일 단축 완료!")
             st.rerun()
 
 # [7. 기타]
 elif menu == "⚙️기타":
-    st.subheader("⚙️ 시스템 관리")
-    st.write("서버 초기화에 대비해 정기적으로 백업 파일을 다운로드하세요.")
-    csv = st.session_state.student_data.to_csv(index=False).encode('utf-8-sig')
+    st.subheader("⚙️ 백업 및 관리")
+    st.write("데이터 손실 방지를 위해 정기적으로 백업 파일을 다운로드하세요.")
+    csv_data = st.session_state.student_data.to_csv(index=False).encode('utf-8-sig')
     st.download_button(
-        label="📥 현재 데이터(CSV) 다운로드",
-        data=csv,
+        label="📥 현재 명단 다운로드 (CSV)",
+        data=csv_data,
         file_name=f"songmath_backup_{datetime.now().strftime('%Y%m%d')}.csv",
         mime="text/csv",
     )
