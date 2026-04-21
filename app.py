@@ -24,7 +24,7 @@ st.markdown("""
         text-align: center;
         padding: 8px 1px !important;
         margin: 0 1px !important;
-        font-size: 10px !important; /* 버튼이 많아져서 글자 크기 최적화 */
+        font-size: 10px !important;
         font-weight: bold;
     }
     div[data-testid="stRadio"] label[data-checked="true"] {
@@ -46,6 +46,7 @@ def load_data():
     if os.path.exists(DB_FILE):
         return pd.read_csv(DB_FILE)
     else:
+        # 파일이 없을 때 초기 샘플 데이터
         return pd.DataFrame(columns=["Name", "Class", "Last Payment"])
 
 def save_data(df):
@@ -71,7 +72,7 @@ def get_processed_df():
 # --- 메인 인터페이스 ---
 st.title("🏫 송수학 통합 관리")
 
-# 4. 가로 7버튼 통합 메뉴 (⚙️기타 추가)
+# 4. 가로 7버튼 통합 메뉴
 menu = st.radio(
     "메뉴", 
     ["📍현황", "👤관리", "💰수익", "🛠️지출", "🔔알림", "🗓️연장", "⚙️기타"], 
@@ -101,8 +102,7 @@ elif menu == "👤관리":
                     new_row = pd.DataFrame([{"Name": n_name, "Class": n_class, "Last Payment": datetime.now().date()}])
                     st.session_state.student_data = pd.concat([st.session_state.student_data, new_row], ignore_index=True)
                     save_data(st.session_state.student_data)
-                    st.success(f"✅ {n_name} 학생이 성공적으로 등록되었습니다!")
-                    # 확인 문구를 보여주기 위해 잠깐 멈춤 없이 rerun 시 toast 사용 가능
+                    st.success(f"✅ {n_name} 학생이 등록되었습니다!")
                     st.toast(f"{n_name} 등록 완료!")
                 else:
                     st.error("이름을 입력해주세요.")
@@ -113,7 +113,6 @@ elif menu == "👤관리":
                 st.session_state.student_data = st.session_state.student_data[st.session_state.student_data['Name'] != del_target]
                 save_data(st.session_state.student_data)
                 st.warning(f"🗑️ {del_target} 학생이 삭제되었습니다.")
-                st.toast(f"{del_target} 삭제 완료")
                 st.rerun()
 
 # [3. 수익]
@@ -133,8 +132,7 @@ elif menu == "🛠️지출":
     st.session_state.f21 = st.number_input("고3 수강료", value=st.session_state.f21, step=10000)
     st.session_state.rent = st.number_input("월세", value=st.session_state.rent, step=10000)
     st.session_state.other = st.number_input("기타 공과금", value=st.session_state.other, step=5000)
-    if st.button("설정 저장"):
-        st.success("✅ 설정이 반영되었습니다!")
+    st.success("✅ 설정이 실시간으로 반영됩니다.")
 
 # [5. 알림]
 elif menu == "🔔알림":
@@ -143,26 +141,38 @@ elif menu == "🔔알림":
     if not alerts.empty:
         st.dataframe(alerts[['Name', 'Class', 'D-Day']], use_container_width=True, height=350)
     else:
-        st.success("깨끗합니다! 결제 예정 학생이 없습니다.")
+        st.success("현재 결제 예정 학생이 없습니다.")
 
-# [6. 연장]
+# [6. 연장] - 마이너스(-) 입력 가능하도록 수정!
 elif menu == "🗓️연장":
-    target_s = st.selectbox("연장 학생", current_df['Name'].tolist())
-    days = st.number_input("추가 일수", value=1, min_value=1)
-    if st.button("기간 연장 적용"):
-        idx = st.session_state.student_data.index[st.session_state.student_data['Name'] == target_s][0]
-        new_date = pd.to_datetime(st.session_state.student_data.at[idx, 'Last Payment']).date() + timedelta(days=days)
-        st.session_state.student_data.at[idx, 'Last Payment'] = str(new_date)
-        save_data(st.session_state.student_data)
-        st.success(f"🗓️ {target_s} 학생의 결제일이 {days}일 연장되었습니다!")
-        st.toast("연장 완료!")
+    st.subheader("결제 기한 조정")
+    st.info("💡 양수(+)는 기간 연장, 음수(-)는 기간 단축")
+    target_s = st.selectbox("학생 선택", current_df['Name'].tolist())
+    # min_value를 제거하여 마이너스 입력이 가능하게 함
+    adjust_days = st.number_input("조정할 일수 (+/-)", value=0, step=1)
+    
+    if st.button("변경 사항 적용"):
+        if target_s:
+            idx = st.session_state.student_data.index[st.session_state.student_data['Name'] == target_s][0]
+            # 기존 날짜에 입력한 일수(양수 또는 음수)를 더함
+            current_date = pd.to_datetime(st.session_state.student_data.at[idx, 'Last Payment']).date()
+            new_date = current_date + timedelta(days=adjust_days)
+            
+            st.session_state.student_data.at[idx, 'Last Payment'] = str(new_date)
+            save_data(st.session_state.student_data)
+            
+            if adjust_days > 0:
+                st.success(f"🗓️ {target_s} 학생의 기간이 {adjust_days}일 연장되었습니다.")
+            elif adjust_days < 0:
+                st.warning(f"🗓️ {target_s} 학생의 기간이 {abs(adjust_days)}일 단축되었습니다.")
+            else:
+                st.info("변동 사항이 없습니다.")
+            st.rerun()
 
-# [7. 기타] - 선용님이 요청하신 다운로드 기능!
+# [7. 기타]
 elif menu == "⚙️기타":
     st.subheader("⚙️ 시스템 관리")
-    st.write("서버가 초기화될 경우를 대비해 정기적으로 데이터를 백업하세요.")
-    
-    # CSV 다운로드 버튼
+    st.write("서버 초기화에 대비해 정기적으로 백업 파일을 다운로드하세요.")
     csv = st.session_state.student_data.to_csv(index=False).encode('utf-8-sig')
     st.download_button(
         label="📥 현재 데이터(CSV) 다운로드",
@@ -170,6 +180,3 @@ elif menu == "⚙️기타":
         file_name=f"songmath_backup_{datetime.now().strftime('%Y%m%d')}.csv",
         mime="text/csv",
     )
-    
-    st.divider()
-    st.info("💡 팁: 다운로드한 파일은 엑셀에서 바로 열어볼 수 있습니다.")
